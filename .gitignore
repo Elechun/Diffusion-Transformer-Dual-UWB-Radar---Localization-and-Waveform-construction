@@ -1,0 +1,26 @@
+# === DATA — access-restricted, NEVER commit ===
+data/
+*.dat
+*.mat
+*.csv
+*.acq
+*.npz
+*.npy
+RF_Rawdata*/
+rf_carer_author_data/
+UWB_BIOPAC_DATA_*/
+
+# Python
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.venv/
+venv/
+env/
+
+# misc
+*.log
+.DS_Store
+
+# Per-subject figures — these are recordings of individual people, never commit
+figures/*sub[0-9]*
