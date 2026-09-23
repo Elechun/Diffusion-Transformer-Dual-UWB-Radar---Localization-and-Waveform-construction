@@ -13,11 +13,12 @@ Folds are the subject-wise split used in training (numpy RandomState(0).permutat
 "fold" is the group of 8 subjects that were held out of the model that scored them.
 Run: AGC=9 python3 export_seed_cv_workbook.py      Env: OUT
 """
+import _path  # noqa: F401  (see _path.py)
 import os, numpy as np
 os.environ.setdefault('AGC', '9')
 from scipy.io import loadmat
 from scipy.signal import find_peaks
-from metrics import zn
+from normalize import zn
 import metrics_windowed as T
 import metrics_timing as PT
 

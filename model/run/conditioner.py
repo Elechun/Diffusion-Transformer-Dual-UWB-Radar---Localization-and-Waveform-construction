@@ -29,6 +29,7 @@ Design:
 Exports `condition(x, thr=4.0)` for later steps to import.
 Saves MTR/dit_step1_conditioner.png
 """
+import _path  # noqa: F401  (see _path.py)
 import os,numpy as np
 import signal_processing as RC
 from scipy.signal import medfilt

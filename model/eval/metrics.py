@@ -38,6 +38,7 @@ phase-randomised surrogate control.
 Exports score(rec, gt, fs) -> dict, and surrogate_control(rec, gt, n) -> the same dict computed against
 phase-randomised copies, so every number can be reported against what shape alone would give.
 """
+import _path  # noqa: F401  (see _path.py)
 import numpy as np
 from scipy.signal import find_peaks, hilbert, butter, filtfilt
 FS_DEF=17.0;RLO,RHI=0.1,0.6

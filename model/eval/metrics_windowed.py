@@ -17,10 +17,12 @@ shorter than one breath. SEG_S=3 or 6 or 21 or 42 changes it if the shorter view
 The null for each metric - the same reconstruction against a different subject's window - is printed in the
 row label, because none of these numbers means anything on its own.
 """
+import _path  # noqa: F401  (see _path.py)
 import os,numpy as np
 import matplotlib;matplotlib.use('Agg');import matplotlib.pyplot as plt
 from matplotlib.gridspec import GridSpec,GridSpecFromSubplotSpec
-from metrics import zn,score
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import signal_processing as RC
 PRE='/home/user1/Desktop/UWB_BIOPAC/preprocessed';MTR='/home/user1/Desktop/UWB_BIOPAC/MTR'

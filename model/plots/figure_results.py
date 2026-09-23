@@ -5,6 +5,7 @@
   E  coverage_scatter_rev.png       rate error vs CS with the coverage box
   F  bars_per_radar_perm_rev.png    deployed own vs both / COM-only / TV-only permutation
 Run: python3 figure_results.py"""
+import _path  # noqa: F401  (see _path.py)
 import os,csv,numpy as np
 import matplotlib;matplotlib.use('Agg');import matplotlib.pyplot as plt
 from scipy.stats import wilcoxon

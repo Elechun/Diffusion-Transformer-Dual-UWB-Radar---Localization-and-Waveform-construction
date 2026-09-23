@@ -8,6 +8,7 @@ predicted noise, NOT an MSE, and NOT |rho| (a sign-free loss can be won by flipp
   loss_equation_1line.png  the one-line version for a crowded slide
 Run: python3 figure_loss_equation.py      Env: OUT (directory)
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt

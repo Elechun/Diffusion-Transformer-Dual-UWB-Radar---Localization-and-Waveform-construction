@@ -17,11 +17,12 @@ Error bars are between-fold (the 5 subject-wise CV folds), not between-subject.
 
 Run: AGC=9 python3 eval_calibration_sweep.py      Env: CALS (list), OUT
 """
+import _path  # noqa: F401  (see _path.py)
 import os, numpy as np
 os.environ.setdefault('AGC', '9')
 from scipy.io import loadmat
 from scipy.signal import find_peaks
-from metrics import zn
+from normalize import zn
 import metrics_windowed as T
 import metrics_timing as PT
 

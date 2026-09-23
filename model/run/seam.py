@@ -14,6 +14,7 @@ main_out    the disjoint windows in time order, each already generated
 bridges     dict mapping the index of the join (1..len(main)-1) to a generated window and the offset, in
             samples, of the join within that window
 """
+import _path  # noqa: F401  (see _path.py)
 import numpy as np
 def _zn(x):
     x=np.asarray(x,float);return (x-x.mean())/(x.std()+1e-9)

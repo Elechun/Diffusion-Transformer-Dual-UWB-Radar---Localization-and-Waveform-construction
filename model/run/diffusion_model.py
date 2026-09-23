@@ -52,6 +52,7 @@ reported numbers come from every seventh window, which is the first one that doe
 predecessor.
 Saves preprocessed/_dit_out.npz and prints the panel.
 """
+import _path  # noqa: F401  (see _path.py)
 import os,math,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 import signal_processing as RC
 from scipy.stats import pearsonr,ttest_rel

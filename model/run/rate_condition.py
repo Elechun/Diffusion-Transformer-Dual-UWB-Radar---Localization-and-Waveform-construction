@@ -21,11 +21,13 @@ One trained model per fold, four inference variants that differ only in where th
 Eval windows exclude anything overlapping the first 84 s, the same span-intersection rule the few-shot
 experiment used, so the calibration block never scores itself.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import pearsonr,ttest_rel
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import network as V1
 import loss as LS

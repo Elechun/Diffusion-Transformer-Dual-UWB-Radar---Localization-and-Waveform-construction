@@ -21,10 +21,12 @@ exactly as before, so a lenient loss cannot buy a lenient number.
 Every arm also runs through a donor - another subject's radar through the same weights - so the prior-driven
 part stays visible even while the waveform is the thing being looked at.
 """
+import _path  # noqa: F401  (see _path.py)
 import os,math,copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.signal import hilbert
 from scipy.stats import ttest_rel
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import signal_processing as RC
 PRE='/home/user1/Desktop/UWB_BIOPAC/preprocessed'

@@ -35,11 +35,13 @@ term is load-bearing regardless of the zone accuracy it reports.
 Start noise is tied to the dataset row, shared across arms, KD draws per window - so the arm comparison is
 paired on the noise and the draw lottery cancels out of it.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import ttest_rel
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import network as V1
 from determinism import set_det,gen_fixed

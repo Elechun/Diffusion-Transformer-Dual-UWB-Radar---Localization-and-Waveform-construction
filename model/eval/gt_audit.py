@@ -13,6 +13,7 @@ by --verify rather than being trusted to have stayed in step:
     happens when the belt recording stopped before the radar did
     subjects in the run's exclusion list are skipped, so a belt cut for an excluded subject is inert
 """
+import _path  # noqa: F401  (see _path.py)
 import os,glob,numpy as np
 import diffusion_model as D
 PRE='/home/user1/Desktop/UWB_BIOPAC/preprocessed'

@@ -9,13 +9,14 @@ stops there. The contribution lives in what is injected BETWEEN the steps, so th
 
 Run: AGC=9 python3 figure_flow_sampling.py     Env: SUB, SEED, OUT (directory)
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 import numpy as np
 os.environ.setdefault('AGC', '9')
 import matplotlib; matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, FancyArrowPatch, Rectangle
-from metrics import zn
+from normalize import zn
 
 PRE = '/home/user1/Desktop/UWB_BIOPAC/preprocessed'
 MTR = '/home/user1/Desktop/UWB_BIOPAC/MTR/rate_recovered'

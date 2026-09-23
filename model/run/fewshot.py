@@ -23,11 +23,13 @@ identical eval windows: head, other and none share one eval set; tail and none s
 PROBE=1 verifies the bookkeeping and exits: no calibration/eval overlap anywhere, partner is never the
 subject itself and never a training subject, and the eval sets agree across the arms being compared.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import ttest_rel
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import network as V1
 import loss as LS

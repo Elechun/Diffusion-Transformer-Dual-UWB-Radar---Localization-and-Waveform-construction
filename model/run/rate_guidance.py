@@ -19,11 +19,13 @@ One envdphi_s2 model per fold, trained exactly as before; five generation varian
 
 Same leakage rule as before: eval windows never overlap the first 84 s.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import pearsonr
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import network as V1
 import loss as LS

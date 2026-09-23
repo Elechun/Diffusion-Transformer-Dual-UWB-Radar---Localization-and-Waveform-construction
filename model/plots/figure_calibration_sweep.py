@@ -9,6 +9,7 @@ Error bars are between-fold (5 subject-wise CV folds, seed-averaged).
 
 Run: python3 figure_calibration_sweep.py      Env: IN, OUT
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 import numpy as np, pandas as pd
 import matplotlib; matplotlib.use('Agg')

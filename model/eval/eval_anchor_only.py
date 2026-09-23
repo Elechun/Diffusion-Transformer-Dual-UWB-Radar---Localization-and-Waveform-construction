@@ -11,10 +11,11 @@ alone does not have.
 
 Run: AGC=9 python3 eval_anchor_only.py      Env: CALS, OUT
 """
+import _path  # noqa: F401  (see _path.py)
 import os, numpy as np
 os.environ.setdefault('AGC', '9')
 import pandas as pd
-from metrics import zn
+from normalize import zn
 import metrics_timing as PT
 from scipy.signal import find_peaks
 

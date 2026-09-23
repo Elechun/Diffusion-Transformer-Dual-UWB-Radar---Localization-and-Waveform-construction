@@ -31,12 +31,14 @@ A wrap seam is created at the roll point of the belt target; it is the same seam
 every step, and the loss terms are correlations rather than derivatives, so it acts as noise rather than
 structure. If the roll arm collapses outright that diagnosis changes.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import ttest_rel,pearsonr
 from scipy.signal import hilbert
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import network as V1
 import loss as LS

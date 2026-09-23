@@ -23,7 +23,13 @@ python3 generate_stream.py
 | calibration | first 84 s: breath-count rate anchor + few-shot on 8 windows (100 steps, lr 5e-5) |
 | loss | eps-MSE + zone cross-entropy + 0.3 x cumulative-chunk shape + 0.6 x whole-window shape, shape = 1 - Pearson |
 
-## Modules
+## Layout
+
+Three groups by role. They are plain scripts, not a package, so each module starts with `import _path`,
+which puts all three directories on `sys.path` however the script is launched (`_path.py` is an identical
+copy in each directory).
+
+### `run/` — operating the model
 
 | file | role |
 |---|---|
@@ -32,18 +38,39 @@ python3 generate_stream.py
 | `br_candidates.py` | breathing-rate-compensated candidate channels |
 | `augment.py` | random-crop augmentation used by the deployed weights (`WTAG=_rc`) |
 | `network.py` | the DiT itself, rotation helper, CFG scale and amplitude rescale |
-| `diffusion_model.py` | dataset assembly, forward process, training loop |
 | `loss.py` | the shape terms (cumulative-chunk and whole-window) |
+| `diffusion_model.py` | dataset assembly, forward process, training loop |
 | `rate_condition.py` | rate as a conditioning channel (studied, not deployed) |
-| `generate_stream.py` | **deployed inference**: continuation sampling over the whole course |
 | `rate_guidance.py` | per-step narrow-band pull toward the calibration rate (g=0.2, sigma=1.2 bpm) |
 | `fewshot.py` | few-shot adaptation on the calibration block; `DONOR=1` runs the donor control |
 | `seam.py` | window joining and the seam ratio |
 | `determinism.py` | fixed noise and seeding |
-| `metrics.py` `metrics_windowed.py` `metrics_timing.py` `tables.py` | scoring |
+| `normalize.py` | the shared z-score helper |
+| **`generate_stream.py`** | **deployed inference**: continuation sampling over the whole course |
+
+### `eval/` — scoring and the studies
+
+| file | role |
+|---|---|
+| `metrics.py` | the scoring panel (breath matching, timing, F1) |
+| `metrics_windowed.py` | the same metrics per 42 s window |
+| `metrics_timing.py` | event-time and rate definitions |
+| `tables.py` | the result tables |
 | `gt_audit.py` | which ground truth a run was trained and scored against |
-| `eval_calibration_sweep.py` `eval_anchor_only.py` | calibration-length study |
-| `figure_*.py` `export_seed_cv_workbook.py` | figures and the per-seed / per-fold workbook |
+| `eval_calibration_sweep.py` | calibration-length study, `natural` and `common` scoring views |
+| `eval_anchor_only.py` | what the calibration anchor alone predicts, with no model |
+| `export_seed_cv_workbook.py` | per-seed / per-fold workbook |
+
+### `plots/` — figures
+
+`figure_calibration_sweep.py`, `figure_results.py`, `figure_flow_sampling.py`, `figure_loss_equation.py`.
+
+### On the direction of the dependencies
+
+`run/` does not need `eval/` to produce output: `generate_stream.py` reaches into `eval/` only for the
+summary table it prints when it finishes. The other `run/` modules are experiment scripts that score
+themselves in a reporting section at the end, so they import `metrics.score` there. Nothing in the model's
+forward or sampling path calls the scorer.
 
 ## Results
 

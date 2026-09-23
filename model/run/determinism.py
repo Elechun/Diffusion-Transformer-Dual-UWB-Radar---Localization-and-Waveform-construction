@@ -22,10 +22,11 @@ Two arms:
 Cheap on purpose - one fold, few epochs. It is not measuring how good the model is, only whether the model
 says the same thing twice.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')      # must precede the cuda context
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
-from metrics import zn
+from normalize import zn
 import diffusion_model as D
 import network as V1
 PRE=V1.PRE;GTAG=V1.GTAG;dev=D.dev

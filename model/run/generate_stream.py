@@ -19,11 +19,12 @@ Scores: seam ratio at joins, whole-record metrics, whole-record spectral bpm (wh
 corrupt), and per-42 s-window metrics on the cont stream vs the independent windows at the same starts.
 Env: SEED, K (overlap chunks, default 1), GUIDE (0.4).
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 os.environ['SRC']='envdphi'
 import numpy as np,torch
-from metrics import zn
+from normalize import zn
 import diffusion_model as D
 import network as V1
 import augment as RA

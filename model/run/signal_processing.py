@@ -5,6 +5,7 @@ Note the carrier: RATIO=0.375 -> FC=8.748 GHz. An earlier variant using FC=7.29e
 fixed bin produced a blurry Matrix Z and must not be used.
 Reusable module: import signal_processing as RC.
 """
+import _path  # noqa: F401  (see _path.py)
 import os, glob, struct, numpy as np
 from scipy.signal import butter, filtfilt, hilbert, decimate, resample, savgol_filter, correlate
 from scipy.stats import pearsonr

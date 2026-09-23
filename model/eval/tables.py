@@ -19,10 +19,12 @@ largely blind to a shift. Since inversion and sub-second timing are this cohort'
 is systematically the most forgiving column here - it says whether the breathing rhythm was reproduced,
 not whether it was placed correctly. The time-error columns are what answer placement.
 """
+import _path  # noqa: F401  (see _path.py)
 import os,glob,numpy as np
 import matplotlib;matplotlib.use('Agg');import matplotlib.pyplot as plt
 from scipy.stats import mannwhitneyu,ttest_rel
-from metrics import zn,score
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import metrics_windowed as T
 import metrics_timing as PT

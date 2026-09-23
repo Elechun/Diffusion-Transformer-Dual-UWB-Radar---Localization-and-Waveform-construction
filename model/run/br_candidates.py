@@ -27,11 +27,13 @@ Everything else is held: same seed, same folds, same architecture, the base loss
 noise shared across arms. Scored with a SIGNED correlation - an absolute value was scoring inversions as
 successes, and 31-37% of pieces are inverted, so it mattered.
 """
+import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import ttest_rel
-from metrics import score,zn
+from normalize import zn
+from metrics import score
 import diffusion_model as D
 import network as V1
 from determinism import set_det,gen_fixed

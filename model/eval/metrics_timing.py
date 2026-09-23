@@ -1,3 +1,4 @@
+import _path  # noqa: F401  (see _path.py)
 import os
 """The two BreathCatcher / MoRe-Fi error metrics, at three lengths and four subject subsets.
 
