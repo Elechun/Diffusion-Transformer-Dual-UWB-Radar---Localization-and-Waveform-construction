@@ -67,12 +67,18 @@ GEO=os.environ.get('GEO','_geo_dataset.npz');GTAG=GEO.replace('_geo_dataset','')
 d=np.load(f'{PRE}/{GEO}',allow_pickle=True)
 X0=d['X'];C=d['C'];G=d['G'];ZONE=d['ZONE'];S=d['S'];CTX=list(d['ctx_names'])
 PROF=d['PROF']
+# CTXADD=<name>: append per-chunk context features preprocessed/_<name>{GTAG}.npy (N,NC,k) to the geometry vector C
+# (e.g. srgeo = SR-region energy centroid + log energy, COM/TV). They enter the slow geometry path (gctx), not the waveform encoder.
+CTXADD=os.environ.get('CTXADD','')
+if CTXADD:
+    _a=np.load(f'{PRE}/_{CTXADD}{GTAG}.npy').astype(C.dtype);assert _a.shape[:2]==C.shape[:2],(_a.shape,C.shape)
+    C=np.concatenate([C,_a],-1);CTX+=[f'{CTXADD}{k}' for k in range(_a.shape[-1])]
 NC=int(d['NC']);CH=int(d['CH']);FS=float(d['FS']);W=NC*CH;NCTX=C.shape[-1]
 HOP_S=float(d['HOP'])/FS if 'HOP' in d.files else 6.0   # row spacing in seconds (6 s grid unless an off-grid set)
 CAND=['COM-LOS','COM-Ghost','TV-LOS','TV-Ghost'];GAPI=CTX.index('gap')
 T_DIFF=1000;DDIM=50;DM=192;NBLK=4;NHEAD=4;EP=int(os.environ.get('EP','60'))
-# CALSTATS=1: the AdaLN summary also receives a per-sample calibration-statistics vector c_u
-# (amplitude-CV and interval-CV of an 84 s belt block, z-scored) through cu_mlp = Linear(2,dm)-SiLU-Linear(dm,dm) with the
+# CALSTATS=1: the AdaLN summary also receives a per-sample calibration-statistics vector c_u (calibration_stats.py:
+# amplitude-CV, interval-CV of an 84 s belt block, z-scored) through cu_mlp = Linear(2,dm)-SiLU-Linear(dm,dm) with the
 # last layer zero-initialised. Unset (default): no module is created and forward() is the pre-existing code path.
 CALSTATS=os.environ.get('CALSTATS','0')=='1';CU_DIM=2
 print(f'{len(X0)} windows, {len(np.unique(S))} subjects, dev={dev}, epochs={EP}, data={GEO}')

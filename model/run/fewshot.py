@@ -28,8 +28,7 @@ import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 import copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.stats import ttest_rel
-from normalize import zn
-from metrics import score
+from metrics import score,zn
 import diffusion_model as D
 import network as V1
 import loss as LS
@@ -39,7 +38,7 @@ PRE=V1.PRE;GTAG=V1.GTAG;dev=D.dev
 NC,CH,FS,W=D.NC,D.CH,D.FS,V1.W
 S,G,ZONE=D.S,D.G,D.ZONE;N=V1.N
 EXCL=tuple(int(v) for v in os.environ.get('EXCL','2,10,13,21,22').split(','))
-SEED=int(os.environ.get('SEED','0'));EP=int(os.environ.get('EP','60'));NFOLD=5
+SEED=int(os.environ.get('SEED','0'));EP=int(os.environ.get('EP','60'));NFOLD=int(os.environ.get('NFOLD','5'))   # NFOLD=10: 10-fold subject CV (use a WTAG such as _k10 so the 5-fold weights are not overwritten)
 KCAL=int(os.environ.get('KCAL','8'))          # calibration windows; 8 rows = 84 s of signal
 ASTEP=int(os.environ.get('ASTEP','100'))      # adaptation gradient steps
 ALR=float(os.environ.get('ALR','5e-5'))

@@ -25,15 +25,15 @@ import _path  # noqa: F401  (see _path.py)
 import os,math,copy,numpy as np,torch,torch.nn as nn,torch.nn.functional as Fn
 from scipy.signal import hilbert
 from scipy.stats import ttest_rel
-from normalize import zn
-from metrics import score
+from metrics import score,zn
 import diffusion_model as D
 import signal_processing as RC
 PRE='/home/user1/Desktop/UWB_BIOPAC/preprocessed'
 GEO=os.environ.get('GEO','_geo_dataset_fc729.npz');GTAG=GEO.replace('_geo_dataset','').replace('.npz','')
 dev=D.dev;NC,CH,FS,DM,W=D.NC,D.CH,D.FS,D.DM,D.NC*D.CH
 PAIRX=os.environ.get('PAIRX','0')=='1'   # LOS<->Ghost cross-reading inside each radar before pooling
-EP=int(os.environ.get('EP','60'));GS=3.0;PHI=0.7;EMA_DECAY=0.999;SEED=int(os.environ.get('SEED','0'))
+EP=int(os.environ.get('EP','60'));GS=float(os.environ.get('GS','3.0'));   # CFG scale (GS env, default 3 = existing)
+PHI=0.7;EMA_DECAY=0.999;SEED=int(os.environ.get('SEED','0'))
 NFOLD=int(os.environ.get('NFOLD','5'))
 S,G,Gt,ZONE=D.S,D.G,D.Gt,D.ZONE;N=len(D.X)
 XIQ0=np.load(f'{PRE}/_iq_candidates{GTAG}.npy').astype(np.float32)      # (N,8,NC,CH)
@@ -157,28 +157,76 @@ class Net(D.DiT):
         # mixer whose output is appended to the concatenation, so the model can use agreement/disagreement between them.
         s.pairx=PAIRX
         s.pair=nn.Sequential(nn.Linear(4*dm,dm),nn.GELU(),nn.Linear(dm,dm)).to(dev) if PAIRX else None
-        s.cat=nn.Sequential(nn.Linear(NCH*dm+(2*dm if PAIRX else 0),dm),nn.GELU(),nn.Linear(dm,dm)).to(dev)
+        # AUXCH=k: the LAST k channels are auxiliary (e.g. Parallel). LOS/SR/geometry build the token exactly as before;
+        # the auxiliary channels only ADD a residual whose last layer starts at zero -> the model starts as the
+        # main-path model and uses the auxiliary path only where training finds it helps ("LOS main, Parallel helps").
+        s.naux=int(os.environ.get('AUXCH','0'))
+        s.cat=nn.Sequential(nn.Linear((NCH-s.naux)*dm+(2*dm if PAIRX else 0),dm),nn.GELU(),nn.Linear(dm,dm)).to(dev)
+        s.aux=nn.Sequential(nn.Linear(s.naux*dm,dm),nn.GELU(),nn.Linear(dm,dm)).to(dev) if s.naux else None
+        if s.naux: nn.init.zeros_(s.aux[2].weight);nn.init.zeros_(s.aux[2].bias)
+        # SUB1S=1: ViT-style finer patches - each 3 s chunk becomes 3 tokens of 1 s (42 tokens per window). The radar
+        # condition is ENCODED per 1 s (its own conv encoder on 17 samples, not the 3 s token repeated); the slow geometry
+        # and zone logits stay per 3 s chunk and are shared by its three 1 s tokens. LOCAL=w: the first LOCALBLK blocks
+        # attend only to tokens within +-w s (local), the rest globally. LOCAL=0 = the all-global 42-token control.
+        s.sub1=os.environ.get('SUB1S','0')=='1'
+        if s.sub1:
+            assert not use_E and not use_C and not phase and not PAIRX,'SUB1S supports the default encoder only'
+            s.K=3;s.P=CH//s.K;assert s.P*s.K==CH
+            s.cenc1=nn.Sequential(nn.Conv1d(1,32,7,padding=3),nn.GELU(),nn.Conv1d(32,64,5,padding=2),nn.GELU(),
+                                  nn.Flatten(),nn.Linear(64*s.P,dm)).to(dev)
+            s.xin=nn.Linear(s.P,dm).to(dev);s.pos=nn.Parameter(torch.randn(1,NC*s.K,dm,device=dev)*.02)
+            s.out=nn.Linear(dm,s.P).to(dev);nn.init.zeros_(s.out.weight);nn.init.zeros_(s.out.bias)
+        # LOCAL=w (tokens): first LOCALBLK blocks attend within +-w tokens (1 s tokens with SUB1S=1, 3 s chunks without)
+        s.lw=int(os.environ.get('LOCAL','0'));s.lblk=int(os.environ.get('LOCALBLK','2'));nt=NC*(s.K if s.sub1 else 1)
+        i=torch.arange(nt,device=dev)
+        s.register_buffer('amask',(i[:,None]-i[None,:]).abs()>s.lw if s.lw>0 else torch.zeros(nt,nt,dtype=torch.bool,device=dev),persistent=False)
+        # RADFACE=1: tell each radar's channels which way that radar sees the subject. RADCH = radar index per input channel
+        # (0 COM, 1 TV). Facing cue = that radar's range rate from the geometry vector (v_com col 7, v_tv col 8; approaching =
+        # chest toward it, receding = back, ~0 = side; subject-specific per 3 s chunk, no belt, no fixed zone->posture table).
+        # FiLM on the channel embeddings of that radar: e_r <- e_r * (1 + gamma_r) + beta_r, (gamma, beta) = Linear([v, |v|]),
+        # zero-initialised -> the model starts exactly as without it; a learned radar-identity embedding is added too.
+        s.radface=os.environ.get('RADFACE','0')=='1'
+        if s.radface:
+            s.radch=torch.tensor([int(v) for v in os.environ['RADCH'].split(',')],device=dev);assert len(s.radch)==NCH,(len(s.radch),NCH)
+            s.face=nn.ModuleList([nn.Linear(2,2*dm).to(dev) for _ in range(2)])
+            for m in s.face: nn.init.zeros_(m.weight);nn.init.zeros_(m.bias)
+            s.remb2=nn.Parameter(torch.zeros(2,dm,device=dev))
         s.mix=nn.Sequential(nn.Linear(2*dm,dm),nn.GELU(),nn.Linear(dm,1)).to(dev)
         s.cproj=nn.Sequential(nn.Linear(2*dm+14,dm),nn.GELU(),nn.Linear(dm,dm)).to(dev)
         if phase:
             s.xin=nn.Linear(2*CH,dm).to(dev)
             s.out=nn.Linear(dm,2*CH).to(dev);nn.init.zeros_(s.out.weight);nn.init.zeros_(s.out.bias)
+    def load_state_dict(s,sd,strict=True,**kw):
+        # the attention mask is rebuilt from LOCAL; drop it from checkpoints saved while it was persistent (09-25 early runs)
+        return super().load_state_dict({k:v for k,v in sd.items() if k!='amask'},strict,**kw)
     def embed(s,x):
         B=x.shape[0]
         if s.use_E:
             e=s.dil(x.reshape(B*NCH,1,W)).reshape(B,NCH,NC,-1).permute(0,2,1,3)
+        elif s.sub1:
+            nt=NC*s.K;e=s.cenc1(x.reshape(B*NCH*nt,1,s.P)).reshape(B,NCH,nt,-1).permute(0,2,1,3)   # (B,42,NCH,dm)
         else:
             e=s.cenc(x.reshape(B*NCH*NC,1,CH)).reshape(B,NCH,NC,-1).permute(0,2,1,3)
         return e                                                        # (B,NC,NCH,dm)
     def cond(s,x,c,pr):
         B=x.shape[0];e=s.embed(x);g=s.gctx(c);lz=s.loc(s.penc(pr))
+        if s.radface:                                     # e (B,NC,NCH,dm); c (B,NC,NCTX) fold-normalised
+            parts=[]
+            for r,col in ((0,7),(1,8)):
+                v=c[...,col:col+1];gb=s.face[r](torch.cat([v,v.abs()],-1)).unsqueeze(2);gm,bt=gb.chunk(2,-1)
+                parts.append((gm,bt+s.remb2[r]))
+            m=(s.radch==1).float().view(1,1,-1,1)
+            gm=parts[0][0]*(1-m)+parts[1][0]*m;bt=parts[0][1]*(1-m)+parts[1][1]*m
+            e=e*(1+gm)+bt
+        if s.sub1: g_,lz_=g.repeat_interleave(s.K,1),lz.repeat_interleave(s.K,1)
+        else: g_,lz_=g,lz
         wv=None
         if s.use_C:
             wv=s.mix(torch.cat([e,g.unsqueeze(2).expand(-1,-1,NCH,-1)],-1)).squeeze(-1)
             wv=wv/(wv.norm(dim=-1,keepdim=True)+1e-6)                   # a direction, not a gain
             f=s.cat((e*wv[...,None]*math.sqrt(NCH)).reshape(B,NC,-1))
         else:
-            fe=e.reshape(B,NC,-1)
+            fe=(e[:,:,:NCH-s.naux] if s.naux else e).reshape(B,e.shape[1],-1)
             if s.pairx:                                   # channels: candidate c uses (2c,2c+1); radar r pairs candidates 2r,2r+1
                 px=[]
                 for r in range(2):
@@ -188,7 +236,20 @@ class Net(D.DiT):
                     px.append(s.pair(q))
                 if px: fe=torch.cat([fe]+px,-1)
             f=s.cat(fe)
-        return s.cproj(torch.cat([f,g,lz],-1)),wv,lz
+            if s.naux: f=f+s.aux(e[:,:,NCH-s.naux:].reshape(B,e.shape[1],-1))
+        return s.cproj(torch.cat([f,g_,lz_],-1)),wv,lz
+    def forward(s,xt,t,tok,cu=None):
+        if not s.sub1 and s.lw==0: return super().forward(xt,t,tok,cu)
+        assert cu is None,'SUB1S / LOCAL do not support CALSTATS'
+        B=xt.shape[0];h=(s.xin(xt.reshape(B,NC*s.K,s.P)) if s.sub1 else s.xin(xt))+s.pos+tok
+        c=s.tmlp(D.temb(t))+tok.mean(1)
+        for i,b in enumerate(s.blocks):
+            if s.lw>0 and i<s.lblk:                                        # local block: Blk.forward with an attention mask
+                p=b.ada(c).chunk(6,-1);sh1,sc1,g1,sh2,sc2,g2=[q.unsqueeze(1) for q in p]
+                hh=b.n1(h)*(1+sc1)+sh1;a,_=b.att(hh,hh,hh,attn_mask=s.amask);h=h+g1*a
+                hh=b.n2(h)*(1+sc2)+sh2;h=h+g2*b.mlp(hh)
+            else: h=b(h,c)
+        return s.out(s.nout(h)).reshape(B,NC,CH)
 # ---------------------------------------------------------------------------------------------------
 # XATTN: radar-conditioning topology experiment (2026-09-10). The radar is NOT added to the waveform tokens;
 # each candidate (COM-LOS, COM-Ghost, TV-LOS, TV-Ghost) of each 3 s chunk stays a separate token with a chunk-time

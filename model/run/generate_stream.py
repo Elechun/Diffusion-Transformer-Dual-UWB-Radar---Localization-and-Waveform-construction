@@ -23,6 +23,9 @@ import _path  # noqa: F401  (see _path.py)
 import os
 os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG',':4096:8')
 os.environ['SRC']='envdphi'
+os.environ.setdefault('GEO','_geo_dataset_fc729.npz')   # the deployed stream was generated with the RESYNCED geometry/profile (09-09 command);
+                                                          # diffusion_model's own default is the pre-resync set, whose C and PROF differ on 98-100 % of
+                                                          # entries (belt, zones and rows identical). Omitting GEO silently fed mismatched conditioning (2026-09-24).
 import numpy as np,torch
 from normalize import zn
 import diffusion_model as D
@@ -60,13 +63,19 @@ DONOR=int(os.environ.get('DONOR','0'))   # 1: few-shot on a DIFFERENT held-out s
 NCAL=min(NCAL,int(os.environ['NCALX'])) if os.environ.get('NCALX','') else NCAL   # cap the few-shot rows: NCALX=0 with CALS=84 is
                                                     # 'long block, anchor only', which separates what the anchor buys from what few-shot buys
 STRIDE_I=7*HOPROWS;STRIDE_C=(7-K)*HOPROWS                  # rows between windows: independent / continuation
-WTAG=os.environ.get('WTAG','')                 # weight tag, e.g. _rc = random-crop (current deployed) weights
+WTAG=os.environ.get('WTAG','');assert os.environ.get('NFOLD','5')=='5' or '_k'+os.environ['NFOLD'] in WTAG,'NFOLD!=5 needs the _k<NFOLD> weight tag'                 # weight tag, e.g. _rc = random-crop (current deployed) weights
 PERM=int(os.environ.get('PERM','0'))
+W2=os.environ.get('W2');W2=float(W2) if W2 not in (None,'') else None   # two-scale CFG weight on (full - base); needs a RADAR=groups model
+W2GATE=os.environ.get('W2GATE','all');GROUPAUX=int(os.environ.get('GROUPAUX','8'))
+PERMSUBJ=int(os.environ.get('PERMSUBJ','0'))    # 1: the perm stream takes the swapped channels from ANOTHER subject at the same course time
 RADAR=os.environ.get('RADAR','both')            # com | tv: zero the other radar's four envdphi channels at inference (matches single-radar training)
 CALEST=os.environ.get('CALEST','spectral')      # calibration-rate estimator: spectral peak (current) | count = breath count over the calibration belt
 PERMR=os.environ.get('PERMR','')                # '' full permutation (both radars displaced, current control) | com | tv:
-PERMSL=slice(0,4) if PERMR=='com' else (slice(4,8) if PERMR=='tv' else None)   # displace ONLY that radar's four envdphi
-assert PERMR in ('','com','tv'),'PERMR = com | tv'                            # channels; context, range profile and the
+PERMSL={'com':slice(0,4),'tv':slice(4,8),                 # displace ONLY that radar's four envdphi channels, or
+        'sr':[2,3,6,7],'los':[0,1,4,5],'new':slice(8,None),'ctx':'ctx'}.get(PERMR)   # 'ctx' = only the CTXADD geometry columns (C[..., 12:])   # ... 'new' = every channel appended after the deployed 8 (INCACHE=ctx16/par12);
+                                                            # candidate order COM-LOS, COM-SR, TV-LOS, TV-SR
+assert PERMR in ('','com','tv','sr','los','new','ctx'),'PERMR = com | tv | sr | los | new | ctx'
+if PERMR=='ctx': assert os.environ.get('CTXADD'),'PERMR=ctx needs CTXADD'                            # channels; context, range profile and the
 if PERMR: assert PERM,'PERMR needs PERM=1'                                    # other radar stay on the aligned window
 ROLLRATE=float(os.environ.get('ROLLRATE','0'))   # >0: the guidance rate is (1-w)*calibration anchor + w*(breath count of the
 ROLLS=float(os.environ.get('ROLLS','30'))        # last ROLLS seconds already generated). ROLLSRC=belt uses the belt instead
@@ -76,7 +85,7 @@ PROTO_GE=float(os.environ.get('PROTO_GE','0.3'));PROTO_ORDER=os.environ.get('PRO
 PROTOARM=os.environ.get('PROTOARM','aligned')    # aligned: this row's prototype | perm: the partner row's prototype (prototype-permutation control)
 PROTOW=np.load(f'{PRE}/{PROTO}').astype(np.float32) if PROTO else None
 SHRINK=float(os.environ.get('SHRINK','0'))      # rate anchor = calib + SHRINK*(mean of the OTHER subjects' calibration rates - calib), GT-free empirical-Bayes          # 1: also run the chain with the conditioning radar taken from a window >=72 s away (same subject) -> stream_perm
-agg=MTAB.agg;MTAG=('' if MODE=='hard' else f'_{MODE}{RFREE}')+('_anchor' if ANCHOR else '')+('_sv' if SIGNVOTE else '')+WTAG+('_perm'+PERMR if PERM else '')+(f'_shr{SHRINK:g}' if SHRINK>0 else '')+(f'_roll{ROLLRATE:g}x{ROLLS:g}{"B" if ROLLSRC=="belt" else ""}' if ROLLRATE>0 else '')+(f'_proto{PROTO_GE:g}{"gl" if PROTO_ORDER=="guide_last" else ""}{"w" if PROTO_WARP else ""}{"P" if PROTOARM=="perm" else ""}' if PROTO else '')+(f'_cal{CALS:g}' if CALS!=84 else '')+('_cnt' if CALEST=='count' else '')+(f'_{RADAR}' if RADAR!='both' else '')+(f'_in{os.environ.get("INCACHE")}' if os.environ.get('INCACHE') else '')+os.environ.get('OUTSUF','')
+agg=MTAB.agg;MTAG=('' if MODE=='hard' else f'_{MODE}{RFREE}')+('_anchor' if ANCHOR else '')+('_sv' if SIGNVOTE else '')+WTAG+('_perm'+PERMR+('subj' if PERMSUBJ else '') if PERM else '')+(f'_shr{SHRINK:g}' if SHRINK>0 else '')+(f'_roll{ROLLRATE:g}x{ROLLS:g}{"B" if ROLLSRC=="belt" else ""}' if ROLLRATE>0 else '')+(f'_proto{PROTO_GE:g}{"gl" if PROTO_ORDER=="guide_last" else ""}{"w" if PROTO_WARP else ""}{"P" if PROTOARM=="perm" else ""}' if PROTO else '')+(f'_cal{CALS:g}' if CALS!=84 else '')+('_cnt' if CALEST=='count' else '')+(f'_{RADAR}' if RADAR!='both' else '')+(f'_in{os.environ.get("INCACHE")}' if os.environ.get('INCACHE') else '')+(f'_w2{W2:g}{W2GATE if W2GATE!="all" else ""}' if W2 is not None else '')+(f"_gs{os.environ['GS']}" if os.environ.get('GS','3.0') not in ('3','3.0') else '')+os.environ.get('OUTSUF','')
 
 @torch.no_grad()
 def _proto_template(row,rate):
@@ -101,7 +110,10 @@ def gen_cont(net,tok,tku,row,rate,g,known,seed=7,steps=50,proto_row=None):
         if clamp:                                          # RePaint clamp: forward-noise the known prefix
             ek=torch.randn(kn.shape,generator=gen).to(dev)
             x=x.clone();x[:,:KC]=a.sqrt()*kn+(1-a).sqrt()*ek
-        t=ts[i].repeat(n);ec=net(x,t,tok);eu=net(x,t,tku);e=eu+V1.GS*(ec-eu)
+        t=ts[i].repeat(n)
+        if isinstance(tku,tuple):                          # two-scale CFG (W2 set): e = e_null + GS (e_base - e_null) + w2 (e_full - e_base)
+            tu,tb,w2=tku;eu=net(x,t,tu);eb=net(x,t,tb);ec_=net(x,t,tok);e=eu+V1.GS*(eb-eu)+w2*(ec_-eb);ec=eb
+        else: ec=net(x,t,tok);eu=net(x,t,tku);e=eu+V1.GS*(ec-eu)
         x0=V1.band_any((x-(1-a).sqrt()*e)/a.sqrt(),1)
         x0c=V1.band_any((x-(1-a).sqrt()*ec)/a.sqrt(),1)
         r_=(x0c.reshape(n,-1).std(1)/(x0.reshape(n,-1).std(1)+1e-9)).reshape(n,1,1)
@@ -129,10 +141,18 @@ def gen_one(net,row,XIQ,Cn,Pn,rate,g,swap_row=None,swap_ch=None):
     """swap_ch = the channel slice of ONE radar taken from swap_row instead of row (per-radar permutation control);
     context and range profile always stay on `row`, so only that radar's waveform evidence is displaced."""
     ci=torch.tensor(Cn[[row]],device=dev);pi=torch.tensor(Pn[[row]],device=dev);x=XIQ[[row]]
-    if swap_ch is not None:
+    if isinstance(swap_ch,str):                   # 'ctx': waveform stays aligned, the appended geometry columns come from swap_row
+        c2=Cn[[row]].copy();c2[...,12:]=Cn[[swap_row]][...,12:];ci=torch.tensor(c2,device=dev)
+    elif swap_ch is not None:
         x=x.copy();x[:,swap_ch]=XIQ[[swap_row]][:,swap_ch]
     xi=torch.tensor(x,device=dev)
-    tok,_,_=net.cond(xi,ci,pi);tku,_,_=net.cond(torch.zeros_like(xi),ci,pi)
+    tok,_,lz=net.cond(xi,ci,pi);tku,_,_=net.cond(torch.zeros_like(xi),ci,pi)
+    if W2 is not None:                                     # base condition = auxiliary (Parallel) channels zeroed
+        xb=xi.clone();xb[:,GROUPAUX:]=0.0;tokb,_,_=net.cond(xb,ci,pi)
+        w=torch.full((1,NC,1),float(W2),device=dev)
+        if W2GATE=='back':                                 # Parallel only where a radar sees the back, zone from the model's own head (no belt)
+            z=lz.argmax(-1).reshape(1,NC);w=w*(((z<=4)|((z>=8)&(z<=10))).float().unsqueeze(-1))
+        tku=(tku,tokb,w)
     return tok,tku
 
 if __name__=='__main__':
@@ -155,10 +175,13 @@ if __name__=='__main__':
     print(f'  mode {MODE} (free steps {RFREE})  seed {SEED}  overlap {6*K} s = {KC} chunks, continuation stride {42-6*K} s ({STRIDE_C} rows), guide g={GUIDE}',flush=True)
     for fi,te in enumerate(folds):
         trm=~np.isin(S,te)&~np.isin(S,EXCL);Cn,Pn=D.fold_norm(trm)
-        if RADAR in ('com','tv') and os.environ.get('GEOSPLIT','0')=='1':      # strict single radar: also drop the other radar's geometry context and profile half (as trained with GEOSPLIT=1)
-            Cn=Cn.copy();Pn=Pn.copy();half=Pn.shape[-1]//2;keep={'com':[0,7,10],'tv':[1,8,11]}[RADAR];drop=[k for k in range(12) if k not in keep];Cn[...,drop]=0.0
-            if RADAR=='com': Pn[...,half:]=0.0
+        RADAR_G=os.environ.get('GEORADAR') or RADAR
+        if RADAR_G in ('com','tv') and os.environ.get('GEOSPLIT','0')=='1':      # strict single radar: also drop the other radar's geometry context and profile half (as trained with GEOSPLIT=1)
+            Cn=Cn.copy();Pn=Pn.copy();half=Pn.shape[-1]//2;keep={'com':[0,7,10],'tv':[1,8,11]}[RADAR_G];drop=[k for k in range(12) if k not in keep];Cn[...,drop]=0.0
+            if RADAR_G=='com': Pn[...,half:]=0.0
             else: Pn[...,:half]=0.0
+        if os.environ.get('GEODROP'):                  # zero extra geometry features (e.g. 10,11 = LOS/SR energy ratio when SR is not an input)
+            Cn=Cn.copy();Cn[...,[int(v) for v in os.environ['GEODROP'].split(',')]]=0.0
         ema=V1.Net().to(dev);ema.load_state_dict(torch.load(f'{PRE}/foldw/_envdphi_s2{WTAG}_s{SEED}_f{fi}.pt',map_location=dev))
         ema.eval();[p.requires_grad_(False) for p in ema.parameters()]
         for u in te:
@@ -172,7 +195,7 @@ if __name__=='__main__':
             wi=[];bi=[]
             for r in ri:
                 tok,tku=gen_one(nh,r,XIQ,Cn,Pn,rate,GUIDE)
-                wi.append(SG.gen_guided(nh,tok,tku,np.array([r]),[rate],GUIDE).cpu().numpy().reshape(NC,CH));bi.append(Gt2[r])
+                wi.append(SG.gen_guided(nh,tok,(tku[0] if isinstance(tku,tuple) else tku),np.array([r]),[rate],GUIDE).cpu().numpy().reshape(NC,CH));bi.append(Gt2[r])
             # continuation chain
             c0=FIRST-K*HOPROWS if ANCHOR else FIRST
             lc=list(range(c0,L,STRIDE_C));rc=[int(rows[i]) for i in lc]
@@ -191,7 +214,7 @@ if __name__=='__main__':
                     if SIGNVOTE and np.corrcoef(w[:KC].reshape(-1),Gt2[r][:KC].reshape(-1))[0,1]<0: w=-w;nflip+=1
                     stream.append(w[KC:]);bstream.append(Gt2[r][KC:])   # the stream starts at 84 s; the belt prefix is never output
                 elif j==0:
-                    w=SG.gen_guided(nh,tok,tku,np.array([r]),[rate_j],GUIDE).cpu().numpy().reshape(NC,CH)
+                    w=SG.gen_guided(nh,tok,(tku[0] if isinstance(tku,tuple) else tku),np.array([r]),[rate_j],GUIDE).cpu().numpy().reshape(NC,CH)
                     stream.append(w);bstream.append(Gt2[r])
                 else:
                     known=np.concatenate(stream)[-KC:]
@@ -214,10 +237,12 @@ if __name__=='__main__':
                 Lc=len(rc);sh=max(2,Lc//2)
                 for j,r in enumerate(rc):
                     rp=rc[(j+sh)%Lc]
+                    if PERMSUBJ:                          # partner SUBJECT's row at the same course time (same index into its rows)
+                        prow=P[d['partner']]['rows'];rp=int(prow[min(lc[j],len(prow)-1)])
                     tok,tku=(gen_one(nh,r,XIQ,Cn,Pn,rate,GUIDE,swap_row=rp,swap_ch=PERMSL) if PERMR
                              else gen_one(nh,rp,XIQ,Cn,Pn,rate,GUIDE))
                     if j==0 and ANCHOR: w=gen_cont(nh,tok,tku,r,rate,GUIDE,Gt2[r][:KC]);stream_p.append(w[KC:])
-                    elif j==0: w=SG.gen_guided(nh,tok,tku,np.array([r]),[rate],GUIDE).cpu().numpy().reshape(NC,CH);stream_p.append(w)
+                    elif j==0: w=SG.gen_guided(nh,tok,(tku[0] if isinstance(tku,tuple) else tku),np.array([r]),[rate],GUIDE).cpu().numpy().reshape(NC,CH);stream_p.append(w)
                     else:
                         known=np.concatenate(stream_p)[-KC:];w=gen_cont(nh,tok,tku,r,rate,GUIDE,known)
                         if MODE=='soft':

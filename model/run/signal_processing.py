@@ -22,7 +22,7 @@ import os as _os
 # RFCARER_RATIO=0.375 restores the old behaviour for comparison.
 FS=17.0; RATIO=float(_os.environ.get('RFCARER_RATIO','0.3125')); DEC=8
 FC=RATIO*23.328e9; C=2.998e8; RES=0.0514; RLO,RHI=0.1,0.6
-_DROOT=os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","data")
+_DROOT=os.path.join(os.path.dirname(os.path.abspath(__file__)),"..","..","data")
 _BATCHES=[os.path.join(_DROOT,"RF_Rawdata"),os.path.join(_DROOT,"RF_Rawdata2"),os.path.join(_DROOT,"RF_Rawdata3"),os.path.join(_DROOT,"RF_Rawdata4")]
 RD=_BATCHES[0]  # legacy
 def _dir(sub,kind):
